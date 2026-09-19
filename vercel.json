@@ -2,6 +2,10 @@
   "version": 2,
   "cleanUrls": false,
   "outputDirectory": "web",
+  "rewrites": [
+    { "source": "/", "destination": "/web/index.html" },
+    { "source": "/:path*", "destination": "/web/:path*" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
