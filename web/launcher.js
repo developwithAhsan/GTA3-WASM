@@ -780,6 +780,16 @@
 		// that here: we call it, and report exactly what happens, success or failure.
 		try {
 			setStatus("loading", "running re3 initialization…");
+
+			// Important: let the browser commit the 20% loading overlay before
+			// entering re3's synchronous C++ startup. Without this paint turn,
+			// callMain() can monopolize the main thread before the user sees any
+			// visual feedback, making Play look completely unresponsive.
+			await new Promise((resolve) =>
+				requestAnimationFrame(() => setTimeout(resolve, 0))
+			);
+
+			log("[module] entering callMain()", "info");
 			const rc = instance.callMain([]);
 			setDiag("Engine initialized", "main loop registered", true);
 			setStatus("loading", "GTA III engine running…");
@@ -907,8 +917,13 @@
 		setStatus("ok", "Ready — select your GTA III folder to play.");
 		els.startEngineBtn.addEventListener("click", () => {
 			runEngineMain(instance, mountPoint, focusRecovery, tabThrottling)
-				.catch((err) => showFatalError("Engine startup failed unexpectedly", err));
-		}, { once: true });
+				.catch((err) => {
+					engineStartRequested = false;
+					els.startEngineBtn.disabled = false;
+					els.startEngineBtn.textContent = "Play GTA III";
+					showFatalError("Engine startup failed unexpectedly", err);
+				});
+		});
 	}
 
 	window.addEventListener("error", (event) => {
