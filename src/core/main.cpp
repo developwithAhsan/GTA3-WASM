@@ -221,10 +221,27 @@ Error(char *fmt, ...)
 void
 ValidateVersion()
 {
+#ifdef __EMSCRIPTEN__
+	// The original PC version check reads an encoded marker from
+	// models/coll/peds.col. It is not required to run the re3 engine and is a
+	// poor fit for the browser importer: OpenFile() returns 0 on failure, while
+	// the original check compared against -1 and then called Seek(0), which
+	// reaches fseek(NULL, ...) and traps in WebAssembly with
+	// "null function or function signature mismatch".
+	//
+	// Browser users may also have valid asset layouts where this legacy marker
+	// file is absent. Skip only this version-marker check on Emscripten; real
+	// gameplay assets are still validated by web/asset-manifest.json and by
+	// the engine as they are loaded.
+	strncpy(version_name, "WASM", sizeof(version_name) - 1);
+	version_name[sizeof(version_name) - 1] = '\0';
+	debug("[BOOT] Skipping legacy peds.col version marker check on WebAssembly\n");
+	return;
+#else
 	int32 file = CFileMgr::OpenFile("models\\coll\\peds.col", "rb");
-	char buff[128];
+	char buff[128] = {};
 
-	if ( file != -1 )
+	if ( file != 0 )
 	{
 		CFileMgr::Seek(file, 100, SEEK_SET);
 		
@@ -243,6 +260,7 @@ ValidateVersion()
 			CFileMgr::CloseFile(file);
 			return;
 		}
+		CFileMgr::CloseFile(file);
 	}
 
 	LoadingScreen("Invalid version", NULL, NULL);
@@ -251,6 +269,7 @@ ValidateVersion()
 	{
 		;
 	}
+#endif
 }
 
 bool
