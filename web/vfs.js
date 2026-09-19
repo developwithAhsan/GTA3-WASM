@@ -42,7 +42,7 @@
 		// original AUDIO folder can add hundreds of MB to MEMFS for data the
 		// engine will never read, which is especially harmful because MEMFS is
 		// resident in browser memory.
-		if (top === "audio") return true;
+		if (top === "audio" || top === "mss") return true;
 
 		// The browser port does not execute native Windows binaries/plugins.
 		if (/\.(exe|dll|asi|bat|cmd|com)$/i.test(normalized)) return true;
@@ -295,7 +295,7 @@
 	}
 
 	/** Mirrors scripts/validate_assets.py's parse_gta3_dat(). */
-	function parseGta3Dat(text) {
+	function parseLevelDat(text) {
 		const paths = [];
 		for (let line of text.split("\n")) {
 			line = line.trim();
@@ -324,36 +324,62 @@
 	function validate(FS, mountPoint, manifest) {
 		const result = {
 			missingRequired: [],
+			emptyRequired: [],
 			missingOptional: [],
 			presentRequired: [],
 			presentOptional: [],
+			defaultDatChecked: false,
 			gta3DatChecked: false,
+			missingFromDefaultDat: [],
 			missingFromGta3Dat: [],
 		};
 
 		const index = buildCaseInsensitiveIndex(FS, mountPoint);
 
+		function validNonEmptyFile(relPath) {
+			const real = resolveCI(index, relPath);
+			if (!real) return false;
+			try {
+				const st = FS.stat(joinPath(mountPoint, real));
+				return !FS.isDir(st.mode) && Number(st.size) > 0;
+			} catch {
+				return false;
+			}
+		}
+
 		for (const entry of manifest.gameAssets.required) {
-			(resolveCI(index, entry.path) ? result.presentRequired : result.missingRequired).push(entry.path);
+			if (!resolveCI(index, entry.path)) result.missingRequired.push(entry.path);
+			else if (!validNonEmptyFile(entry.path)) result.emptyRequired.push(entry.path);
+			else result.presentRequired.push(entry.path);
 		}
 		for (const entry of manifest.gameAssets.optional) {
 			(resolveCI(index, entry.path) ? result.presentOptional : result.missingOptional).push(entry.path);
 		}
 
-		const gta3DatReal = resolveCI(index, "data/gta3.dat");
-		const datText = gta3DatReal ? readTextFile(FS, joinPath(mountPoint, gta3DatReal)) : null;
-		if (datText != null) {
-			result.gta3DatChecked = true;
-			for (const path of parseGta3Dat(datText)) {
-				if (!resolveCI(index, path)) result.missingFromGta3Dat.push(path);
-			}
+		function checkLevelDat(sourcePath, checkedKey, missingKey) {
+			const real = resolveCI(index, sourcePath);
+			const text = real ? readTextFile(FS, joinPath(mountPoint, real)) : null;
+			if (text == null) return;
+			result[checkedKey] = true;
+			const missing = new Set();
+			for (const path of parseLevelDat(text)) if (!resolveCI(index, path)) missing.add(path);
+			result[missingKey] = [...missing];
 		}
 
-		result.ok = result.missingRequired.length === 0 && result.missingFromGta3Dat.length === 0;
-		result.messages = [
+		checkLevelDat("data/default.dat", "defaultDatChecked", "missingFromDefaultDat");
+		checkLevelDat("data/gta3.dat", "gta3DatChecked", "missingFromGta3Dat");
+
+		result.ok = result.missingRequired.length === 0 &&
+			result.emptyRequired.length === 0 &&
+			result.missingFromDefaultDat.length === 0 &&
+			result.missingFromGta3Dat.length === 0;
+
+		result.messages = [...new Set([
 			...result.missingRequired.map((p) => `Missing game asset: ${p}`),
+			...result.emptyRequired.map((p) => `Invalid game asset: ${p} is empty or unreadable`),
+			...result.missingFromDefaultDat.map((p) => `Missing game asset: ${p} (referenced by data/default.dat)`),
 			...result.missingFromGta3Dat.map((p) => `Missing game asset: ${p} (referenced by data/gta3.dat)`),
-		];
+		])];
 		return result;
 	}
 

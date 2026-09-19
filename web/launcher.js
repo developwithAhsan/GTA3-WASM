@@ -444,17 +444,21 @@
 	let cachedManifest = null;
 	async function loadAssetManifest() {
 		if (cachedManifest) return cachedManifest;
-		const resp = await fetch("asset-manifest.json");
+		const resp = await fetch("asset-manifest.json?v=12", { cache: "no-cache" });
 		if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 		cachedManifest = await resp.json();
 		return cachedManifest;
 	}
 
 	function renderAssetValidation(result, mountPoint) {
-		const total = result.presentRequired.length + result.missingRequired.length;
+		const total = result.presentRequired.length + result.missingRequired.length + (result.emptyRequired?.length || 0);
+		const invalidRequired = result.missingRequired.length + (result.emptyRequired?.length || 0);
 		els.startEngineBtn.disabled = !result.ok;
 		els.startEngineBtn.textContent = result.ok ? "Play GTA III" : "Game files required";
-		setDiag("Required assets present", `${result.presentRequired.length} / ${total}`, result.missingRequired.length === 0);
+		setDiag("Required assets valid", `${result.presentRequired.length} / ${total}`, invalidRequired === 0);
+		if (result.defaultDatChecked) {
+			setDiag("data/default.dat references missing", String(result.missingFromDefaultDat.length), result.missingFromDefaultDat.length === 0);
+		}
 		if (result.gta3DatChecked) {
 			setDiag("data/gta3.dat references missing", String(result.missingFromGta3Dat.length), result.missingFromGta3Dat.length === 0);
 		}
@@ -468,15 +472,11 @@
 		}
 
 		if (result.ok) {
-			els.assetsStatus.textContent = `All required assets found under ${mountPoint}.`;
+			els.assetsStatus.textContent = `All startup assets and level-manifest references are valid under ${mountPoint}.`;
 			els.assetsStatus.dataset.ok = "true";
-			bootProgress.setStage(2); // [2] Filesystem initialized (all required assets present)
+			bootProgress.setStage(2);
 		} else {
-			// Deliberately not "File failed" -- every path here is reported individually
-			// above as "Missing game asset: <path>" (task 9).
-			els.assetsStatus.textContent =
-				`${result.missingRequired.length + result.missingFromGta3Dat.length} required file(s) missing under ${mountPoint}. ` +
-				"You can still start the engine to see how it handles that, or provide assets below.";
+			els.assetsStatus.textContent = `${result.messages.length} asset validation issue(s) found under ${mountPoint}. Play is disabled until these files are supplied from a valid GTA III installation.`;
 			els.assetsStatus.dataset.ok = "false";
 		}
 	}

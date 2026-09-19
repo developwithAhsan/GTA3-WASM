@@ -54,6 +54,50 @@
       {
         "path": "data/weapon.dat",
         "why": "Weapon stats (src/weapons/WeaponInfo.cpp)."
+      },
+      {
+        "path": "anim/ped.ifp",
+        "why": "Core pedestrian animations; CAnimManager hard-opens this file."
+      },
+      {
+        "path": "models/fonts.txd",
+        "why": "Default font textures; CFont hard-loads this file."
+      },
+      {
+        "path": "models/hud.txd",
+        "why": "HUD textures; CHud hard-loads this file."
+      },
+      {
+        "path": "models/particle.txd",
+        "why": "Particle textures; CGame hard-loads this file."
+      },
+      {
+        "path": "models/frontend.txd",
+        "why": "Frontend textures; the PC menu hard-loads this file."
+      },
+      {
+        "path": "models/menu.txd",
+        "why": "Menu textures; the PC frontend hard-loads this file."
+      },
+      {
+        "path": "models/gta3.dir",
+        "why": "Directory index paired with gta3.img; player model lookup opens this file."
+      },
+      {
+        "path": "data/surface.dat",
+        "why": "Surface table loaded during core initialization."
+      },
+      {
+        "path": "data/timecyc.dat",
+        "why": "Timecycle/weather table loaded during core initialization."
+      },
+      {
+        "path": "data/pedstats.dat",
+        "why": "Pedestrian statistics loaded during core initialization."
+      },
+      {
+        "path": "data/fistfite.dat",
+        "why": "Fight move table loaded during pedestrian initialization."
       }
     ],
     "optional": [
