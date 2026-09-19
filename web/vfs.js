@@ -33,6 +33,23 @@
 		return `${mountPoint.replace(/\/+$/, "")}/${normalize(relPath)}`;
 	}
 
+	function shouldSkipImportedFile(relPath) {
+		const normalized = normalize(relPath);
+		const lower = normalized.toLowerCase();
+		const top = lower.split("/")[0];
+
+		// The WebAssembly build uses re3's NULL audio backend. Importing the
+		// original AUDIO folder can add hundreds of MB to MEMFS for data the
+		// engine will never read, which is especially harmful because MEMFS is
+		// resident in browser memory.
+		if (top === "audio") return true;
+
+		// The browser port does not execute native Windows binaries/plugins.
+		if (/\.(exe|dll|asi|bat|cmd|com)$/i.test(normalized)) return true;
+
+		return false;
+	}
+
 	// --- low-level FS helpers ------------------------------------------------
 
 	function ensureMountPoint(FS, mountPoint) {
@@ -103,29 +120,45 @@
 	 */
 	async function mountFromFileList(FS, mountPoint, fileList, { onProgress } = {}) {
 		ensureMountPoint(FS, mountPoint);
-		const files = Array.from(fileList);
-		const totalBytes = files.reduce((sum, file) => sum + (file.size || 0), 0);
+		const allFiles = Array.from(fileList);
+		const entries = [];
+		let skippedFiles = 0;
+		let skippedBytes = 0;
+
+		for (const file of allFiles) {
+			const rel = file.relativePath || file.webkitRelativePath || file.name;
+			const trimmed = rel.includes("/") ? rel.slice(rel.indexOf("/") + 1) : rel;
+			if (!trimmed) continue;
+			if (shouldSkipImportedFile(trimmed)) {
+				skippedFiles++;
+				skippedBytes += file.size || 0;
+				continue;
+			}
+			entries.push({ file, trimmed });
+		}
+
+		const totalBytes = entries.reduce((sum, entry) => sum + (entry.file.size || 0), 0);
 		let done = 0;
 		let doneBytes = 0;
 
-		for (const file of files) {
-			const rel = file.relativePath || file.webkitRelativePath || file.name;
-			// webkitRelativePath includes the picked folder's own name as the first
-			// segment (e.g. "gamefiles/data/gta3.dat"); strip it so paths line up
-			// with the manifest, which is relative to the *contents* of that folder.
-			const trimmed = rel.includes("/") ? rel.slice(rel.indexOf("/") + 1) : rel;
-			if (!trimmed) continue;
+		onProgress?.(0, entries.length, "", 0, totalBytes, "filtered", {
+			skippedFiles,
+			skippedBytes,
+			originalFiles: allFiles.length,
+		});
+
+		for (const { file, trimmed } of entries) {
 
 			// Report the file before reading it so a very large IMG/TXD does not
 			// look like a frozen browser while File.arrayBuffer() is working.
-			onProgress?.(done, files.length, trimmed, doneBytes, totalBytes, "reading");
+			onProgress?.(done, entries.length, trimmed, doneBytes, totalBytes, "reading");
 
 			const buf = new Uint8Array(await file.arrayBuffer());
 			writeFileDeep(FS, joinPath(mountPoint, trimmed), buf);
 
 			done++;
 			doneBytes += file.size || buf.byteLength;
-			onProgress?.(done, files.length, trimmed, doneBytes, totalBytes, "written");
+			onProgress?.(done, entries.length, trimmed, doneBytes, totalBytes, "written");
 
 			// Give layout/paint/input a chance to run while importing a large GTA
 			// installation. File reads are async, but a sequence of FS.writeFile()
