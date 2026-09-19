@@ -46,7 +46,7 @@ jobs:
       - name: Upload WASM symbol map
         uses: actions/upload-artifact@v4
         with:
-          name: re3-wasm-symbols
+          name: re3-wasm-symbols-${{ github.run_attempt }}
           path: build-wasm/src/re3_wasm.js.symbols
           retention-days: 14
 
@@ -56,6 +56,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
+          name: github-pages-${{ github.run_attempt }}
           path: web
 
   deploy:
@@ -68,3 +69,5 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
