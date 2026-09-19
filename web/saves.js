@@ -29,7 +29,8 @@
 
 	let FS = null;
 	let saveDir = null;
-	let saveMount = null; // the IDBFS mount descriptor for saveDir specifically (FS.mount()'s return value's .mount)
+	let saveMount = null; // only used when persistent IDBFS saves are enabled
+	let backend = "not mounted";
 	let logFn = () => {};
 
 	// --- sync state machine ---------------------------------------------------
@@ -93,7 +94,7 @@
 	}
 
 	function requestSync() {
-		if (!FS || !saveDir) return; // not mounted (never mounted, or IDBFS unavailable)
+		if (!FS || !saveDir || !saveMount) return; // session-only mode has nothing to persist
 		if (state === SYNCING) {
 			pending = true; // coalesce -- never start a second overlapping syncfs()
 			return;
@@ -128,39 +129,28 @@
 			if (!FS.analyzePath(saveDir).exists) throw e;
 		}
 
-		try {
-			if (!FS.filesystems || !FS.filesystems.IDBFS) {
-				throw new Error("IDBFS is not available in this build (missing -lidbfs.js?)");
-			}
-			const mountRoot = FS.mount(FS.filesystems.IDBFS, {}, saveDir);
-			saveMount = mountRoot.mount;
-			logFn(`[Save] Persistent filesystem mounted at ${saveDir}`, "info");
-		} catch (err) {
-			logFn(`[Save] ERROR: IDBFS unavailable (${err}); saves will not persist across reloads this session`, "stderr");
-			saveDir = null; // disables further sync attempts; the plain MEMFS
-			// directory from mkdirTree() above still lets the game save normally
-			onStateChange(); // the diagnostics panel's own render() only runs on
-			// setState() transitions, and mounting/restoring here happens entirely
-			// outside that state machine (it's a one-time setup step, not a save
-			// sync) -- nudge it once so "Backend"/"Save directory" reflect reality
-			// instead of showing whatever setupSaveDiagnosticsPanel() saw at its own
-			// (pre-mount) initial render.
-			return;
-		}
-
-		logFn("[Save] Restoring saves from IndexedDB…", "info");
-		try {
-			await syncfsAsync(true);
-			logFn("[Save] Restore complete", "info");
-		} catch (err) {
-			logFn(`[Save] ERROR: could not restore saves from IndexedDB: ${err}`, "stderr");
-		}
-		onStateChange(); // see comment in the failure branch above
+		// Do not block GTA III startup on IndexedDB.
+		//
+		// Some Chromium/ChromeOS configurations can leave IDBFS populate
+		// (syncfs(true)) pending for a very long time. launcher.js waits for
+		// this function before callMain(), so the visible loader remains at 12%
+		// forever even though the WASM engine itself is ready.
+		//
+		// For reliable browser gameplay, saves therefore use the already-mounted
+		// MEMFS game filesystem for this session. This keeps normal GTA III save
+		// file I/O working without an asynchronous startup dependency. Persistent
+		// saves can be reintroduced later with a non-blocking OPFS/worker design.
+		saveMount = null;
+		backend = "MEMFS (session-only)";
+		logFn(`[Save] Session save directory ready at ${saveDir}; IndexedDB restore skipped for fast boot`, "info");
+		onStateChange();
 	}
-
 	/** Developer control: sync now instead of waiting for the next save. */
 	function forceSync() {
-		if (!FS || !saveDir) return;
+		if (!FS || !saveDir || !saveMount) {
+			logFn("[Save] Persistent sync is disabled; saves are session-only", "info");
+			return;
+		}
 		requestSync();
 	}
 
@@ -175,13 +165,13 @@
 				/* not a plain file (shouldn't happen under userfiles/) -- skip it */
 			}
 		}
-		await syncfsAsync(false);
+		if (saveMount) await syncfsAsync(false);
 		logFn("[Save] Browser saves cleared", "info");
 	}
 
 	function getStatus() {
 		return {
-			backend: FS && saveDir ? "IDBFS" : (FS ? "MEMFS (session-only)" : "not mounted"),
+			backend,
 			saveDir,
 			state,
 			lastSyncResult,
