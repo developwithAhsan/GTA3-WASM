@@ -805,12 +805,6 @@ LoadingScreen(const char *str1, const char *str2, const char *splashscreen)
  		DoRWStuffEndOfFrame();
 	}
 
-#ifdef __EMSCRIPTEN__
-	// LoadingScreen() is called between the major synchronous startup phases.
-	// Yield one browser turn here so the page can paint the loading UI, process
-	// input and avoid being reported as unresponsive during world/model setup.
-	emscripten_sleep(0);
-#endif
 }
 
 void
