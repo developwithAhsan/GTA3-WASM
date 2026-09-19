@@ -63,7 +63,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .hero-copy h1 span { color: var(--accent); }
 .hero-copy p { width:min(560px,80vw); margin:22px 0 0; color:#c3cbd2; font-size:clamp(14px,1.6vw,18px); line-height:1.6; }
 
-#loading-overlay, #assets-overlay { position:absolute; inset:0; z-index: 10; display:grid; place-items:center; padding:24px; background:rgba(4,6,8,.62); backdrop-filter: blur(8px); }
+#loading-overlay, #assets-overlay { position:absolute; inset:0; display:grid; place-items:center; padding:24px; background:rgba(4,6,8,.62); backdrop-filter: blur(8px); }
+#assets-overlay { z-index: 10; }
+#loading-overlay { z-index: 12; }
 #loading-overlay.hidden, #assets-overlay.hidden, .hidden { display:none !important; }
 .loading-card {
   width:min(520px,92vw);
