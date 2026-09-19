@@ -170,12 +170,6 @@ if(EMSCRIPTEN)
         -sUSE_GLFW=3
         -sUSE_WEBGL2=1
         -sALLOW_MEMORY_GROWTH=1
-        # GTA III performs several long, synchronous startup/loading phases.
-        # Asyncify lets browser-only emscripten_sleep(0) checkpoints yield back
-        # to the event loop so the page stays responsive and can repaint its
-        # loading UI instead of triggering Chrome's "Wait / Exit page" prompt.
-        -sASYNCIFY=1
-        -sASYNCIFY_STACK_SIZE=65536
         # No -sUSE_PTHREADS: Phase 8's threading audit (docs/THREADING_WASM.md) found
         # the only background thread anywhere in re3 or its dependencies is the
         # CD-streaming worker (src/core/CdStreamPosix.cpp), which now runs
