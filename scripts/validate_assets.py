@@ -31,7 +31,7 @@ DEFAULT_ASSET_ROOT = os.path.join(REPO_ROOT, "gamefiles")
 # CFileLoader::LoadLevel (src/core/FileLoader.cpp) keywords that are followed
 # by a single relative path token. Keep in sync with that switch if it changes.
 GTA3_DAT_PATH_KEYWORDS = {
-    "IDE", "IPL", "COLFILE", "MODELFILE", "HIERFILE", "TEXDICTION", "CDIMAGE",
+    "IDE", "IPL", "MAPZONE", "COLFILE", "MODELFILE", "HIERFILE", "TEXDICTION", "CDIMAGE",
 }
 
 
