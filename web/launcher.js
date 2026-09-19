@@ -722,7 +722,19 @@
 	// persisted in IndexedDB last session has actually been restored onto the
 	// virtual filesystem -- FS.syncfs(true) is asynchronous, so this is a real
 	// ordering requirement, not a formality.
+	let engineStartRequested = false;
+
 	async function runEngineMain(instance, mountPoint, focusRecovery, tabThrottling) {
+		if (engineStartRequested) return;
+		engineStartRequested = true;
+
+		// Give instant visible feedback for the Play button. Previously the loader
+		// was shown underneath #assets-overlay and the asset dialog stayed on top
+		// while save restoration ran, making the button appear to do nothing.
+		els.startEngineBtn.disabled = true;
+		els.startEngineBtn.textContent = "Starting…";
+		els.assetsOverlay.classList.add("hidden");
+		els.heroLayer?.classList.add("hidden");
 		showLoadingOverlay();
 		setLoadingTitle("Starting GTA III");
 		setLoadingStage("SAVES");
@@ -730,6 +742,12 @@
 		setLoadingDetail("Preparing the local save directory.");
 		setProgress(0.12);
 		setStatus("loading", "restoring saved games…");
+
+		// Force at least one browser paint before any filesystem/engine work.
+		// This guarantees the player sees the loader even if the following WASM
+		// startup performs a long synchronous operation on the main thread.
+		await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
 		try {
 			await Re3Saves.mountAndRestore(instance, mountPoint, log);
 		} catch (err) {
@@ -740,8 +758,6 @@
 			log(`[Save] ERROR: save persistence setup failed unexpectedly: ${err}`, "stderr");
 		}
 
-		els.assetsOverlay.classList.add("hidden");
-		els.heroLayer?.classList.add("hidden");
 		AssetVFS.chdirToRoot(instance.FS, mountPoint);
 		log(`[module] cwd set to ${mountPoint}, calling main()`, "info");
 		setLoadingTitle("Booting GTA III");
@@ -776,6 +792,9 @@
 			log(`[module] main() returned ${rc}; waiting for gameplay state`, "info");
 		} catch (err) {
 			setDiag("Engine initialized", "false (see error)", false);
+			engineStartRequested = false;
+			els.startEngineBtn.disabled = false;
+			els.startEngineBtn.textContent = "Play GTA III";
 			showFatalError("re3 initialization failed", err);
 		}
 	}
