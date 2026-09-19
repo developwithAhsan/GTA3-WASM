@@ -27,6 +27,11 @@ else()
 endif()
 
 set(${PROJECT}_AUDIO "OAL" CACHE STRING "Audio")
+if(EMSCRIPTEN)
+    # The browser build is intentionally silent. The existing null sample
+    # manager satisfies re3's audio API without opening GTA III audio files.
+    set(${PROJECT}_AUDIO "NULL" CACHE STRING "Audio" FORCE)
+endif()
 
 option(${PROJECT}_WITH_OPUS "Build ${EXECUTABLE} with opus support" OFF)
 option(${PROJECT}_WITH_LIBSNDFILE "Build ${EXECUTABLE} with libsndfile (instead of internal decoder)" OFF)
@@ -39,13 +44,6 @@ if(NOT ${PROJECT}_AUDIO IN_LIST ${PROJECT}_AUDIOS)
 endif()
 
 if(EMSCRIPTEN)
-    # Browser build uses the existing null sample manager. This keeps gameplay,
-    # scripts, saves and rendering functional without requiring GTA III's
-    # audio/SFX.SDT, audio/SFX.RAW, radio or mission-audio files.
-    set(${PROJECT}_AUDIO "NULL" CACHE STRING "Audio" FORCE)
-    set("${PROJECT}_AUDIO_OAL" OFF)
-    set("${PROJECT}_AUDIO_MSS" OFF)
-    set("${PROJECT}_AUDIO_NULL" ON)
     set(LIBRW_PLATFORM "GL3" CACHE STRING "Platform" FORCE)
     set(LIBRW_GL3_GFXLIB "GLFW" CACHE STRING "gfxlib for gl3" FORCE)
     # Ensure dependencies like mpg123 and libsndfile are disabled if not provided
