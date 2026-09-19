@@ -736,35 +736,29 @@
 		els.assetsOverlay.classList.add("hidden");
 		els.heroLayer?.classList.add("hidden");
 		showLoadingOverlay();
-		setLoadingTitle("Starting GTA III");
-		setLoadingStage("SAVES");
-		setLoadingStatus("Restoring saved games…");
-		setLoadingDetail("Preparing the local save directory.");
-		setProgress(0.12);
-		setStatus("loading", "restoring saved games…");
-
-		// Force at least one browser paint before any filesystem/engine work.
-		// This guarantees the player sees the loader even if the following WASM
-		// startup performs a long synchronous operation on the main thread.
-		await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+		// Never hold the Play flow at a "save restore" checkpoint. The browser
+		// build currently uses session-only MEMFS saves, so prepare that directory
+		// opportunistically and enter the engine immediately.
+		setLoadingTitle("Booting GTA III");
+		setLoadingStage("ENGINE");
+		setLoadingStatus("Starting the re3 engine…");
+		setLoadingDetail("Preparing the game filesystem and renderer.");
+		setProgress(0.20);
+		setStatus("loading", "starting re3 engine…");
 
 		try {
-			await Re3Saves.mountAndRestore(instance, mountPoint, log);
+			const saveSetup = Re3Saves.mountAndRestore(instance, mountPoint, log);
+			if (saveSetup && typeof saveSetup.catch === "function") {
+				saveSetup.catch((err) =>
+					log(`[Save] Session save setup failed; continuing without persistence: ${err}`, "stderr")
+				);
+			}
 		} catch (err) {
-			// Not fatal: the game can still save/load in-memory for this session,
-			// it just won't persist across a reload. See mountAndRestore()'s own
-			// try/catch for the expected (IDBFS-unavailable) failure mode; this
-			// one is for anything unexpected escaping it.
-			log(`[Save] ERROR: save persistence setup failed unexpectedly: ${err}`, "stderr");
+			log(`[Save] Session save setup failed; continuing: ${err}`, "stderr");
 		}
 
 		AssetVFS.chdirToRoot(instance.FS, mountPoint);
 		log(`[module] cwd set to ${mountPoint}, calling main()`, "info");
-		setLoadingTitle("Booting GTA III");
-		setLoadingStage("ENGINE");
-		setLoadingStatus("Starting the re3 engine…");
-		setLoadingDetail("Initializing renderer and core game systems.");
-		setProgress(0.20);
 
 		// Keep the browser loader visible until the engine reaches real gameplay
 		// and has completed at least two rendered frames.
