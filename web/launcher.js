@@ -29,7 +29,11 @@
 		statusDot: document.getElementById("status-dot"),
 		statusText: document.getElementById("status-text"),
 		loadingOverlay: document.getElementById("loading-overlay"),
+		loadingTitle: document.getElementById("loading-title"),
 		loadingStatus: document.getElementById("loading-status"),
+		loadingDetail: document.getElementById("loading-detail"),
+		loadingPercent: document.getElementById("loading-percent"),
+		loadingStage: document.getElementById("loading-stage"),
 		progressFill: document.getElementById("progress-fill"),
 		errorBanner: document.getElementById("error-banner"),
 		errorDetail: document.getElementById("error-detail"),
@@ -82,13 +86,36 @@
 		els.loadingStatus.textContent = text;
 	}
 
+	function setLoadingTitle(text) {
+		if (els.loadingTitle) els.loadingTitle.textContent = text;
+	}
+
+	function setLoadingDetail(text) {
+		if (els.loadingDetail) els.loadingDetail.textContent = text || "";
+	}
+
+	function setLoadingStage(text) {
+		if (els.loadingStage) els.loadingStage.textContent = text || "";
+	}
+
+	function formatBytes(bytes) {
+		if (!Number.isFinite(bytes) || bytes <= 0) return "0 MB";
+		const mb = bytes / (1024 * 1024);
+		if (mb < 1024) return `${mb.toFixed(mb >= 100 ? 0 : 1)} MB`;
+		return `${(mb / 1024).toFixed(2)} GB`;
+	}
+
 	function setProgress(fraction /* 0..1, or null for indeterminate */) {
 		if (fraction == null) {
 			els.progressFill.classList.add("indeterminate");
 			els.progressFill.style.width = "";
+			if (els.loadingPercent) els.loadingPercent.textContent = "Loading…";
 		} else {
+			const clamped = Math.max(0, Math.min(1, fraction));
+			const pct = Math.round(clamped * 100);
 			els.progressFill.classList.remove("indeterminate");
-			els.progressFill.style.width = `${Math.round(Math.max(0, Math.min(1, fraction)) * 100)}%`;
+			els.progressFill.style.width = `${pct}%`;
+			if (els.loadingPercent) els.loadingPercent.textContent = `${pct}%`;
 		}
 	}
 
@@ -471,17 +498,12 @@
 			log(`[assets] could not load asset-manifest.json (${err}) -- validation will be skipped`, "stderr");
 		}
 
-		// Prefer IDBFS so a returning user doesn't have to re-pick their folder every
-		// reload (task 6C); MEMFS (session-only) is a safe fallback if IndexedDB is
-		// unavailable (e.g. some private-browsing modes).
-		try {
-			AssetVFS.mountIDBFS(instance.FS, mountPoint);
-			await AssetVFS.loadFromIDB(instance.FS, mountPoint);
-			log(`[assets] mounted IDBFS at ${mountPoint} (persists across reloads)`, "info");
-		} catch (err) {
-			log(`[assets] IDBFS unavailable (${err}); using in-memory storage for this session only`, "stderr");
-			AssetVFS.mountEmpty(instance.FS, mountPoint);
-		}
+		// Keep the large GTA III installation session-only. Persisting the entire
+		// install to IDBFS duplicates hundreds of MB of data, causes long syncs,
+		// and can make the page appear frozen/black on memory-constrained devices.
+		// Save games still use their own small persistent IDBFS mount (saves.js).
+		AssetVFS.mountEmpty(instance.FS, mountPoint);
+		log(`[assets] mounted session-only game filesystem at ${mountPoint}; save games remain persistent`, "info");
 
 		// Packaged filesystem (task 7): quietly try, it's normal for there to be none.
 		try {
@@ -497,28 +519,46 @@
 		els.folderInput.addEventListener("change", async () => {
 			if (!els.folderInput.files.length) return;
 			els.pickFolderBtn.disabled = true;
+			els.startEngineBtn.disabled = true;
 			const originalLabel = els.pickFolderBtn.textContent;
+			showLoadingOverlay();
+			setLoadingTitle("Loading GTA III files");
+			setLoadingStage("GAME FILES");
+			setLoadingStatus("Reading your local GTA III folder…");
+			setLoadingDetail("Files stay on this device and are not uploaded.");
+			setProgress(0);
+
 			try {
 				const n = await AssetVFS.mountFromFileList(instance.FS, mountPoint, els.folderInput.files, {
-					onProgress: (done, total) => {
-						if (done % 25 === 0 || done === total) els.pickFolderBtn.textContent = `Loading… ${done}/${total}`;
+					onProgress: (done, total, currentFile, doneBytes, totalBytes, phase) => {
+						const fraction = totalBytes > 0 ? doneBytes / totalBytes : (total ? done / total : 0);
+						setProgress(fraction);
+						setLoadingStatus(`Loading game files — ${done}/${total}`);
+						setLoadingDetail(
+							`${phase === "reading" ? "Reading" : "Loaded"}: ${currentFile} • ${formatBytes(doneBytes)} / ${formatBytes(totalBytes)}`
+						);
+						els.pickFolderBtn.textContent = `Loading… ${done}/${total}`;
 					},
 				});
 				log(`[assets] loaded ${n} file(s) from the chosen folder`, "info");
-				try {
-					await AssetVFS.persistToIDB(instance.FS, mountPoint);
-					log("[assets] persisted to IndexedDB for next time", "info");
-				} catch (err) {
-					log(`[assets] could not persist to IndexedDB: ${err}`, "stderr");
-				}
+
+				setLoadingTitle("Checking GTA III files");
+				setLoadingStage("VALIDATION");
+				setLoadingStatus("Validating required game data…");
+				setLoadingDetail("Checking gta3.dat references and required models.");
+				setProgress(0.99);
+				await new Promise((resolve) => setTimeout(resolve, 0));
+				await revalidateAssets(instance, mountPoint, manifest);
+				setProgress(1);
 			} catch (err) {
 				log(`[assets] failed to load folder: ${err}`, "stderr");
+				showFatalError("Could not load GTA III files", err);
 			} finally {
 				els.pickFolderBtn.disabled = false;
 				els.pickFolderBtn.textContent = originalLabel;
 				els.folderInput.value = "";
+				if (!els.errorBanner.classList.contains("visible")) hideLoadingOverlay();
 			}
-			await revalidateAssets(instance, mountPoint, manifest);
 		});
 
 		if (devAssetsRequested()) {
@@ -533,7 +573,6 @@
 						},
 					});
 					log(`[assets] loaded ${n} file(s) from the dev asset server`, "info");
-					await AssetVFS.persistToIDB(instance.FS, mountPoint).catch(() => {});
 				} catch (err) {
 					log(`[assets] dev-mount failed: ${err}`, "stderr");
 				} finally {
@@ -545,6 +584,130 @@
 		}
 
 		els.assetsOverlay.classList.remove("hidden");
+	}
+
+	function monitorEngineStartup(instance) {
+		let getStage, getGameState, getRenderCount, forceExitFrontend, setDebugTiming;
+		try { getStage = instance.cwrap("re3_GetBootStage", "number", []); } catch {}
+		try { getGameState = instance.cwrap("re3_GetGameState", "number", []); } catch {}
+		try { getRenderCount = instance.cwrap("re3_GetRenderCallCount", "number", []); } catch {}
+		try { forceExitFrontend = instance.cwrap("re3_DebugForceExitFrontend", null, []); } catch {}
+		try { setDebugTiming = instance.cwrap("re3_SetDebugTiming", null, ["number"]); } catch {}
+
+		let stopped = false;
+		let forcedNewGame = false;
+		let fallbackTiming = false;
+		let lastState = -1;
+		let lastStateChangeAt = performance.now();
+
+		const stageLabels = {
+			1: ["Starting WebAssembly runtime…", 0.22, "WASM"],
+			2: ["Game filesystem ready…", 0.30, "FILESYSTEM"],
+			3: ["Starting WebGL renderer…", 0.40, "RENDERER"],
+			4: ["Starting silent audio backend…", 0.48, "AUDIO"],
+			5: ["Loading core GTA III data…", 0.58, "GAME DATA"],
+			6: ["Initializing GTA III engine…", 0.67, "ENGINE"],
+			7: ["Main menu ready…", 0.74, "FRONTEND"],
+		};
+
+		function poll() {
+			if (stopped) return;
+
+			let stage = 1;
+			let state = -1;
+			let renders = 0;
+			try { if (getStage) stage = getStage(); } catch {}
+			try { if (getGameState) state = getGameState(); } catch {}
+			try { if (getRenderCount) renders = getRenderCount(); } catch {}
+
+			if (state !== lastState) {
+				lastState = state;
+				lastStateChangeAt = performance.now();
+				log(`[startup] game state -> ${GAME_STATE_NAMES[state] ?? state}`, "info");
+			}
+
+			const stageInfo = stageLabels[Math.max(1, Math.min(7, stage))];
+			if (stageInfo) {
+				setLoadingStatus(stageInfo[0]);
+				setProgress(stageInfo[1]);
+				setLoadingStage(stageInfo[2]);
+			}
+
+			if (state >= 0) {
+				setLoadingDetail(`Engine state: ${GAME_STATE_NAMES[state] ?? `state ${state}`}`);
+			}
+
+			// "Play GTA III" means enter the actual game, not stop at the frontend.
+			// The engine's exported helper clears the same menu flag that the native
+			// New Game action clears; the normal state machine then executes
+			// InitialiseGame() and advances to GS_PLAYING_GAME.
+			if (state === 7 && !forcedNewGame && forceExitFrontend) {
+				forcedNewGame = true;
+				setLoadingTitle("Starting GTA III");
+				setLoadingStatus("Main menu ready — starting a new game…");
+				setLoadingDetail("Preparing Liberty City and initial streamed models.");
+				setLoadingStage("NEW GAME");
+				setProgress(0.76);
+				try {
+					forceExitFrontend();
+					log("[startup] requested New Game from browser launcher", "info");
+				} catch (err) {
+					log(`[startup] could not auto-start New Game: ${err}`, "stderr");
+				}
+			}
+
+			if (state === 8) {
+				setLoadingTitle("Loading Liberty City");
+				setLoadingStatus("Initializing world, models and scripts…");
+				setLoadingDetail("Large GTA III archives are being read locally. Keep this tab active.");
+				setLoadingStage("WORLD");
+				setProgress(0.86);
+			}
+
+			if (state === 9) {
+				setLoadingTitle("Entering Liberty City");
+				setLoadingStatus("Starting gameplay renderer…");
+				setLoadingDetail(`Rendered gameplay frames: ${renders}`);
+				setLoadingStage("PLAYING");
+				setProgress(renders > 0 ? 0.98 : 0.94);
+
+				if (renders >= 2) {
+					stopped = true;
+					if (fallbackTiming && setDebugTiming) {
+						try { setDebugTiming(0); } catch {}
+					}
+					setProgress(1);
+					setStatus("ok", "GTA III running");
+					setLoadingStatus("GTA III is ready");
+					setLoadingDetail("Click the game to capture the mouse. Press Esc to release it.");
+					setTimeout(hideLoadingOverlay, 250);
+					return;
+				}
+			}
+
+			// If the browser is visible but requestAnimationFrame is not advancing
+			// startup, switch the existing main loop to a 16 ms timer. Once gameplay
+			// renders, the code above restores the normal rAF timing.
+			if (
+				!fallbackTiming &&
+				!document.hidden &&
+				state >= 0 && state < 9 &&
+				performance.now() - lastStateChangeAt > 1800 &&
+				setDebugTiming
+			) {
+				fallbackTiming = true;
+				try {
+					setDebugTiming(1);
+					log("[startup] state stalled; enabled timer-based startup fallback", "info");
+					setLoadingDetail("Browser rendering was slow; using compatibility timing to continue startup.");
+				} catch {}
+			}
+
+			setTimeout(poll, 120);
+		}
+
+		setTimeout(poll, 60);
+		return () => { stopped = true; };
 	}
 
 	// Deliberately not called automatically -- the user decides when to hand off to
@@ -560,6 +723,12 @@
 	// virtual filesystem -- FS.syncfs(true) is asynchronous, so this is a real
 	// ordering requirement, not a formality.
 	async function runEngineMain(instance, mountPoint, focusRecovery, tabThrottling) {
+		showLoadingOverlay();
+		setLoadingTitle("Starting GTA III");
+		setLoadingStage("SAVES");
+		setLoadingStatus("Restoring saved games…");
+		setLoadingDetail("Preparing the local save directory.");
+		setProgress(0.12);
 		setStatus("loading", "restoring saved games…");
 		try {
 			await Re3Saves.mountAndRestore(instance, mountPoint, log);
@@ -575,6 +744,15 @@
 		els.heroLayer?.classList.add("hidden");
 		AssetVFS.chdirToRoot(instance.FS, mountPoint);
 		log(`[module] cwd set to ${mountPoint}, calling main()`, "info");
+		setLoadingTitle("Booting GTA III");
+		setLoadingStage("ENGINE");
+		setLoadingStatus("Starting the re3 engine…");
+		setLoadingDetail("Initializing renderer and core game systems.");
+		setProgress(0.20);
+
+		// Keep the browser loader visible until the engine reaches real gameplay
+		// and has completed at least two rendered frames.
+		monitorEngineStartup(instance);
 
 		// Only start clearing input state on browser focus loss once the engine is
 		// actually about to run -- see Re3Input.setupFocusLossRecovery and
@@ -593,9 +771,9 @@
 		try {
 			setStatus("loading", "running re3 initialization…");
 			const rc = instance.callMain([]);
-			setDiag("Engine initialized", "true (main returned)", true);
-			setStatus("ok", `re3 main() returned ${rc}`);
-			log(`[module] main() returned ${rc}`, "info");
+			setDiag("Engine initialized", "main loop registered", true);
+			setStatus("loading", "GTA III engine running…");
+			log(`[module] main() returned ${rc}; waiting for gameplay state`, "info");
 		} catch (err) {
 			setDiag("Engine initialized", "false (see error)", false);
 			showFatalError("re3 initialization failed", err);
@@ -642,7 +820,10 @@
 		}
 
 		setStatus("loading", "loading WebAssembly module…");
+		setLoadingTitle("Preparing GTA III");
+		setLoadingStage("WASM");
 		setLoadingStatus("Fetching and compiling re3_wasm.wasm…");
+		setLoadingDetail("Loading the browser game engine.");
 		setProgress(null);
 
 		/** @type {any} */
