@@ -155,16 +155,11 @@ if(${PROJECT}_INSTALL)
 endif()
 
 if(EMSCRIPTEN)
-    # Emscripten's OpenAL implementation doesn't ship AL/efx.h (see oal_utils.h/.cpp).
-    # This vendored replacement lives outside src/audio/oal/AL so it can never shadow
-    # a real OpenAL SDK's efx.h on native (non-Emscripten) builds.
-    target_include_directories(${EXECUTABLE} PRIVATE
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/audio/oal/emscripten_al>
-    )
+    # The WASM target uses the NULL sample manager, so it deliberately does not
+    # link OpenAL/MPG123 or require any GTA III audio files.
     set(EMSCRIPTEN_FLAGS
         -sUSE_GLFW=3
         -sUSE_WEBGL2=1
-        -sUSE_MPG123=1
         -sALLOW_MEMORY_GROWTH=1
         # No -sUSE_PTHREADS: Phase 8's threading audit (docs/THREADING_WASM.md) found
         # the only background thread anywhere in re3 or its dependencies is the
