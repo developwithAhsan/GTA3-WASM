@@ -587,18 +587,16 @@
 	}
 
 	function monitorEngineStartup(instance) {
-		let getStage, getGameState, getRenderCount, forceExitFrontend, setDebugTiming;
+		let getStage, getGameState, getRenderCount;
 		try { getStage = instance.cwrap("re3_GetBootStage", "number", []); } catch {}
 		try { getGameState = instance.cwrap("re3_GetGameState", "number", []); } catch {}
 		try { getRenderCount = instance.cwrap("re3_GetRenderCallCount", "number", []); } catch {}
-		try { forceExitFrontend = instance.cwrap("re3_DebugForceExitFrontend", null, []); } catch {}
-		try { setDebugTiming = instance.cwrap("re3_SetDebugTiming", null, ["number"]); } catch {}
 
 		let stopped = false;
-		let forcedNewGame = false;
-		let fallbackTiming = false;
 		let lastState = -1;
-		let lastStateChangeAt = performance.now();
+		let lastStage = -1;
+		let lastChangeAt = performance.now();
+		let frontendShown = false;
 
 		const stageLabels = {
 			1: ["Starting WebAssembly runtime…", 0.22, "WASM"],
@@ -620,14 +618,15 @@
 			try { if (getGameState) state = getGameState(); } catch {}
 			try { if (getRenderCount) renders = getRenderCount(); } catch {}
 
-			if (state !== lastState) {
+			if (state !== lastState || stage !== lastStage) {
 				lastState = state;
-				lastStateChangeAt = performance.now();
-				log(`[startup] game state -> ${GAME_STATE_NAMES[state] ?? state}`, "info");
+				lastStage = stage;
+				lastChangeAt = performance.now();
+				log(`[startup] stage=${stage} state=${GAME_STATE_NAMES[state] ?? state} renders=${renders}`, "info");
 			}
 
 			const stageInfo = stageLabels[Math.max(1, Math.min(7, stage))];
-			if (stageInfo) {
+			if (stageInfo && state < 8) {
 				setLoadingStatus(stageInfo[0]);
 				setProgress(stageInfo[1]);
 				setLoadingStage(stageInfo[2]);
@@ -637,29 +636,21 @@
 				setLoadingDetail(`Engine state: ${GAME_STATE_NAMES[state] ?? `state ${state}`}`);
 			}
 
-			// "Play GTA III" means enter the actual game, not stop at the frontend.
-			// The engine's exported helper clears the same menu flag that the native
-			// New Game action clears; the normal state machine then executes
-			// InitialiseGame() and advances to GS_PLAYING_GAME.
-			if (state === 7 && !forcedNewGame && forceExitFrontend) {
-				forcedNewGame = true;
-				setLoadingTitle("Starting GTA III");
-				setLoadingStatus("Main menu ready — starting a new game…");
-				setLoadingDetail("Preparing Liberty City and initial streamed models.");
-				setLoadingStage("NEW GAME");
-				setProgress(0.76);
-				try {
-					forceExitFrontend();
-					log("[startup] requested New Game from browser launcher", "info");
-				} catch (err) {
-					log(`[startup] could not auto-start New Game: ${err}`, "stderr");
-				}
+			// Read-only production monitor: never mutate re3 state/timing here.
+			if (state === 7 && !frontendShown) {
+				frontendShown = true;
+				setProgress(1);
+				setStatus("ok", "GTA III main menu ready");
+				setLoadingStatus("GTA III main menu ready");
+				setLoadingDetail("Use the game menu to start or load a game.");
+				setTimeout(hideLoadingOverlay, 120);
 			}
 
 			if (state === 8) {
+				showLoadingOverlay();
 				setLoadingTitle("Loading Liberty City");
 				setLoadingStatus("Initializing world, models and scripts…");
-				setLoadingDetail("Large GTA III archives are being read locally. Keep this tab active.");
+				setLoadingDetail("Reading GTA III data and preparing the world.");
 				setLoadingStage("WORLD");
 				setProgress(0.86);
 			}
@@ -672,38 +663,19 @@
 				setProgress(renders > 0 ? 0.98 : 0.94);
 
 				if (renders >= 2) {
-					stopped = true;
-					if (fallbackTiming && setDebugTiming) {
-						try { setDebugTiming(0); } catch {}
-					}
 					setProgress(1);
 					setStatus("ok", "GTA III running");
 					setLoadingStatus("GTA III is ready");
 					setLoadingDetail("Click the game to capture the mouse. Press Esc to release it.");
-					setTimeout(hideLoadingOverlay, 250);
-					return;
+					setTimeout(hideLoadingOverlay, 120);
 				}
 			}
 
-			// If the browser is visible but requestAnimationFrame is not advancing
-			// startup, switch the existing main loop to a 16 ms timer. Once gameplay
-			// renders, the code above restores the normal rAF timing.
-			if (
-				!fallbackTiming &&
-				!document.hidden &&
-				state >= 0 && state < 9 &&
-				performance.now() - lastStateChangeAt > 1800 &&
-				setDebugTiming
-			) {
-				fallbackTiming = true;
-				try {
-					setDebugTiming(1);
-					log("[startup] state stalled; enabled timer-based startup fallback", "info");
-					setLoadingDetail("Browser rendering was slow; using compatibility timing to continue startup.");
-				} catch {}
+			if (performance.now() - lastChangeAt > 15000) {
+				setLoadingDetail(`Still working: stage ${stage}, state ${GAME_STATE_NAMES[state] ?? state}. Open Diagnostics if this does not advance.`);
 			}
 
-			setTimeout(poll, 120);
+			setTimeout(poll, 150);
 		}
 
 		setTimeout(poll, 60);
