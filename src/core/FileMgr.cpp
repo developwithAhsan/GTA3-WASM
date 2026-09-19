@@ -94,6 +94,10 @@ static int
 myfgetc(int fd)
 {
 	int c;
+	if(fd <= 0 || fd >= NUMFILES || myfiles[fd].file == nil){
+		fprintf(stderr, "CFileMgr: read from invalid file handle %d\n", fd);
+		return EOF;
+	}
 	c = fgetc(myfiles[fd].file);
 	if(myfiles[fd].isText && c == 015){
 		/* translate CRLF to LF */
@@ -141,6 +145,10 @@ myfgets(char *buf, int len, int fd)
 static size_t
 myfread(void *buf, size_t elt, size_t n, int fd)
 {
+	if(fd <= 0 || fd >= NUMFILES || myfiles[fd].file == nil){
+		fprintf(stderr, "CFileMgr: fread from invalid file handle %d\n", fd);
+		return 0;
+	}
 	if(myfiles[fd].isText){
 		unsigned char *p;
 		size_t i;
@@ -183,12 +191,21 @@ myfwrite(void *buf, size_t elt, size_t n, int fd)
 static int
 myfseek(int fd, long offset, int whence)
 {
+	if(fd <= 0 || fd >= NUMFILES || myfiles[fd].file == nil){
+		fprintf(stderr, "CFileMgr: seek on invalid file handle %d (offset=%ld, whence=%d)\n",
+		        fd, offset, whence);
+		return -1;
+	}
 	return fseek(myfiles[fd].file, offset, whence);
 }
 
 static int
 myfeof(int fd)
 {
+	if(fd <= 0 || fd >= NUMFILES || myfiles[fd].file == nil){
+		fprintf(stderr, "CFileMgr: eof check on invalid file handle %d\n", fd);
+		return 1;
+	}
 	return feof(myfiles[fd].file);
 //	return ferror(myfiles[fd].file);
 }
