@@ -24,7 +24,7 @@ jobs:
       - name: Set up Emscripten
         uses: mymindstorm/setup-emsdk@v14
         with:
-          version: latest
+          version: 6.0.6
           actions-cache-folder: emsdk-cache
 
       - name: Configure WebAssembly build
@@ -35,10 +35,20 @@ jobs:
 
       - name: Verify browser bundle
         run: |
+          emcc --version
           test -f web/build/re3_wasm.js
           test -f web/build/re3_wasm.wasm
+          test -f build-wasm/src/re3_wasm.js.symbols
           test -f web/index.html
           ls -lh web/build/re3_wasm.*
+          ls -lh build-wasm/src/re3_wasm.js.symbols
+
+      - name: Upload WASM symbol map
+        uses: actions/upload-artifact@v4
+        with:
+          name: re3-wasm-symbols
+          path: build-wasm/src/re3_wasm.js.symbols
+          retention-days: 14
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
