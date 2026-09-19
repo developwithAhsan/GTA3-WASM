@@ -462,6 +462,7 @@
 		if (result.gta3DatChecked) {
 			setDiag("data/gta3.dat references missing", String(result.missingFromGta3Dat.length), result.missingFromGta3Dat.length === 0);
 		}
+		setDiag("Core asset format issues", String(result.formatIssues?.length || 0), (result.formatIssues?.length || 0) === 0);
 
 		els.assetsMissingList.innerHTML = "";
 		for (const msg of result.messages) {

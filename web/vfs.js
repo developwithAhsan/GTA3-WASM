@@ -335,6 +335,7 @@
 			gta3DatChecked: false,
 			missingFromDefaultDat: [],
 			missingFromGta3Dat: [],
+			formatIssues: [],
 		};
 
 		const index = buildCaseInsensitiveIndex(FS, mountPoint);
@@ -372,16 +373,70 @@
 		checkLevelDat("data/default.dat", "defaultDatChecked", "missingFromDefaultDat");
 		checkLevelDat("data/gta3.dat", "gta3DatChecked", "missingFromGta3Dat");
 
+		function checkArchivePair() {
+			const dirReal = resolveCI(index, "models/gta3.dir");
+			const imgReal = resolveCI(index, "models/gta3.img");
+			if (!dirReal || !imgReal) return;
+			try {
+				const dir = FS.readFile(joinPath(mountPoint, dirReal));
+				const imgSize = Number(FS.stat(joinPath(mountPoint, imgReal)).size);
+				if (dir.byteLength < 32 || dir.byteLength % 32 !== 0) {
+					result.formatIssues.push("models/gta3.dir has an invalid directory-table size");
+					return;
+				}
+				const view = new DataView(dir.buffer, dir.byteOffset, dir.byteLength);
+				let populated = 0;
+				for (let off = 0; off < dir.byteLength; off += 32) {
+					const sector = view.getUint32(off, true);
+					const sectors = view.getUint32(off + 4, true);
+					if (sectors === 0) continue;
+					populated++;
+					const endByte = (sector + sectors) * 2048;
+					if (!Number.isSafeInteger(endByte) || endByte > imgSize) {
+						result.formatIssues.push(`models/gta3.dir entry ${populated} points beyond models/gta3.img`);
+						return;
+					}
+				}
+				if (populated < 10) result.formatIssues.push("models/gta3.dir contains too few usable entries");
+			} catch (err) {
+				result.formatIssues.push(`Could not validate gta3.dir/gta3.img pair: ${err}`);
+			}
+		}
+
+		function checkPedIfpSignature() {
+			const real = resolveCI(index, "anim/ped.ifp");
+			if (!real) return;
+			let stream = null;
+			try {
+				stream = FS.open(joinPath(mountPoint, real), "r");
+				const header = new Uint8Array(4);
+				const count = FS.read(stream, header, 0, 4, 0);
+				const sig = count === 4 ? String.fromCharCode(...header) : "";
+				if (sig !== "ANLF" && sig !== "ANPK") {
+					result.formatIssues.push(`anim/ped.ifp has unsupported header "${sig || "empty"}"`);
+				}
+			} catch (err) {
+				result.formatIssues.push(`Could not inspect anim/ped.ifp: ${err}`);
+			} finally {
+				if (stream) try { FS.close(stream); } catch {}
+			}
+		}
+
+		checkArchivePair();
+		checkPedIfpSignature();
+
 		result.ok = result.missingRequired.length === 0 &&
 			result.emptyRequired.length === 0 &&
 			result.missingFromDefaultDat.length === 0 &&
-			result.missingFromGta3Dat.length === 0;
+			result.missingFromGta3Dat.length === 0 &&
+			result.formatIssues.length === 0;
 
 		result.messages = [...new Set([
 			...result.missingRequired.map((p) => `Missing game asset: ${p}`),
 			...result.emptyRequired.map((p) => `Invalid game asset: ${p} is empty or unreadable`),
 			...result.missingFromDefaultDat.map((p) => `Missing game asset: ${p} (referenced by data/default.dat)`),
 			...result.missingFromGta3Dat.map((p) => `Missing game asset: ${p} (referenced by data/gta3.dat)`),
+			...result.formatIssues.map((p) => `Invalid/incompatible game data: ${p}`),
 		])];
 		return result;
 	}
