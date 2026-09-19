@@ -2078,6 +2078,9 @@ CStreaming::LoadAllRequestedModels(bool priority)
 	int imgOffset, streamId, status;
 	int i;
 	uint32 posn, size;
+#ifdef __EMSCRIPTEN__
+	int wasmYieldCounter = 0;
+#endif
 
 	if(bInsideLoadAll)
 		return;
