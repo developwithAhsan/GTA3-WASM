@@ -5,6 +5,15 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 
 file(GLOB_RECURSE ${PROJECT}_SOURCES "*.cpp" "*.h" "*.rc")
 
+# The NULL backend is self-contained in audio/sampman_null.cpp. The OAL/EAX
+# implementation files are not merely unused at runtime; some include
+# platform-specific headers (for example dsound.h), so exclude them from a
+# silent build instead of relying on per-file preprocessor guards.
+if(${PROJECT}_AUDIO STREQUAL "NULL")
+    list(FILTER ${PROJECT}_SOURCES EXCLUDE REGEX ".*/audio/oal/.*\\.cpp$")
+    list(FILTER ${PROJECT}_SOURCES EXCLUDE REGEX ".*/audio/eax/.*\\.cpp$")
+endif()
+
 function(header_directories RETURN_LIST)
     file(GLOB_RECURSE ALL_SRCS *.h *.cpp *.c)
     set(RELDIRS)
