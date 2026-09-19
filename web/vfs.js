@@ -104,7 +104,10 @@
 	async function mountFromFileList(FS, mountPoint, fileList, { onProgress } = {}) {
 		ensureMountPoint(FS, mountPoint);
 		const files = Array.from(fileList);
+		const totalBytes = files.reduce((sum, file) => sum + (file.size || 0), 0);
 		let done = 0;
+		let doneBytes = 0;
+
 		for (const file of files) {
 			const rel = file.relativePath || file.webkitRelativePath || file.name;
 			// webkitRelativePath includes the picked folder's own name as the first
@@ -112,10 +115,24 @@
 			// with the manifest, which is relative to the *contents* of that folder.
 			const trimmed = rel.includes("/") ? rel.slice(rel.indexOf("/") + 1) : rel;
 			if (!trimmed) continue;
+
+			// Report the file before reading it so a very large IMG/TXD does not
+			// look like a frozen browser while File.arrayBuffer() is working.
+			onProgress?.(done, files.length, trimmed, doneBytes, totalBytes, "reading");
+
 			const buf = new Uint8Array(await file.arrayBuffer());
 			writeFileDeep(FS, joinPath(mountPoint, trimmed), buf);
+
 			done++;
-			onProgress?.(done, files.length, trimmed);
+			doneBytes += file.size || buf.byteLength;
+			onProgress?.(done, files.length, trimmed, doneBytes, totalBytes, "written");
+
+			// Give layout/paint/input a chance to run while importing a large GTA
+			// installation. File reads are async, but a sequence of FS.writeFile()
+			// calls can still monopolize the main thread on fast local storage.
+			if (done % 8 === 0) {
+				await new Promise((resolve) => setTimeout(resolve, 0));
+			}
 		}
 		return done;
 	}
