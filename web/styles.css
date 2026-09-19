@@ -290,8 +290,27 @@ html, body {
 
 .assets-card h2 {
 	margin: 0 0 0.5rem;
-	font-size: 1rem;
+	font-size: clamp(1.25rem, 3vw, 1.8rem);
+	letter-spacing: -0.03em;
 	color: var(--text);
+}
+
+.assets-card .eyebrow {
+	margin-bottom: 0.6rem;
+	color: var(--accent);
+	font: 700 0.68rem/1 var(--mono);
+	letter-spacing: 0.14em;
+}
+
+.assets-card .primary-action {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: #07111e;
+	font-weight: 700;
+}
+
+.assets-card .primary-action:hover {
+	background: #80c3ff;
 }
 
 .assets-hint {

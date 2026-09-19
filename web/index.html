@@ -45,20 +45,21 @@
 
 			<div id="assets-overlay" class="hidden">
 				<div class="assets-card">
-					<h2>Game assets</h2>
+					<div class="eyebrow">GTA III / WEBASSEMBLY</div>
+					<h2>Bring Liberty City to your browser</h2>
 					<p class="assets-hint">
-						re3 needs your own legally obtained GTA III installation &mdash; nothing is
-						downloaded, bundled, or sent anywhere. Point the runtime at your local files,
-						or continue without assets to see how the engine reports that.
-						See <a href="../docs/GAME_ASSETS.md" target="_blank" rel="noopener">docs/GAME_ASSETS.md</a>.
+						Choose a ZIP of your own legally obtained GTA III PC assets. Everything is unpacked
+						locally into the browser filesystem; no game files are uploaded.
 					</p>
 					<div id="assets-status">Asset root not mounted yet.</div>
 					<ul id="assets-missing-list"></ul>
 					<div class="assets-actions">
-						<button id="pick-folder-btn" type="button">Choose GTA III folder&hellip;</button>
+						<button id="pick-zip-btn" class="primary-action" type="button">Choose asset ZIP</button>
+						<button id="pick-folder-btn" type="button">Choose folder instead</button>
 						<button id="dev-mount-btn" type="button" style="display:none">Load from dev server</button>
 						<button id="start-engine-btn" type="button">Start engine</button>
 					</div>
+					<input type="file" id="zip-input" accept=".zip,application/zip" hidden>
 					<input type="file" id="folder-input" webkitdirectory multiple hidden>
 				</div>
 			</div>

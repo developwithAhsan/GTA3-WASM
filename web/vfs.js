@@ -120,6 +120,48 @@
 		return done;
 	}
 
+	/** Mount a user-provided ZIP archive without sending it to a server. Supports the
+	 * standard stored and deflated entries emitted by common archive tools. */
+	async function mountFromZip(FS, mountPoint, archive, { onProgress } = {}) {
+		const bytes = new Uint8Array(await archive.arrayBuffer());
+		const view = new DataView(bytes.buffer);
+		const decoder = new TextDecoder();
+		const entries = [];
+		let offset = 0;
+		while (offset + 30 <= bytes.length) {
+			if (view.getUint32(offset, true) !== 0x04034b50) break;
+			const flags = view.getUint16(offset + 6, true);
+			const method = view.getUint16(offset + 8, true);
+			const compressedSize = view.getUint32(offset + 18, true);
+			const nameSize = view.getUint16(offset + 26, true);
+			const extraSize = view.getUint16(offset + 28, true);
+			const name = decoder.decode(bytes.slice(offset + 30, offset + 30 + nameSize));
+			const dataStart = offset + 30 + nameSize + extraSize;
+			if ((flags & 1) !== 0) throw new Error("Encrypted ZIP archives are not supported");
+			if (!name.endsWith("/")) entries.push({ name, method, data: bytes.slice(dataStart, dataStart + compressedSize) });
+			offset = dataStart + compressedSize;
+		}
+		if (!entries.length) throw new Error("The ZIP is empty or could not be read");
+		ensureMountPoint(FS, mountPoint);
+		let done = 0;
+		for (const entry of entries) {
+			let data = entry.data;
+			if (entry.method === 8) {
+				if (typeof DecompressionStream === "undefined") throw new Error("This browser cannot decompress ZIP files");
+				const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+				data = new Uint8Array(await new Response(stream).arrayBuffer());
+			} else if (entry.method !== 0) {
+				throw new Error(`Unsupported ZIP compression method: ${entry.method}`);
+			}
+			const normalized = normalize(entry.name).replace(/^\/+/, "");
+			if (!normalized || normalized.split("/").includes("..")) throw new Error("ZIP contains an unsafe path");
+			writeFileDeep(FS, joinPath(mountPoint, normalized), data);
+			done++;
+			onProgress?.(done, entries.length, normalized);
+		}
+		return done;
+	}
+
 	/**
 	 * Task 8: development-only asset mounting. Fetches a file listing + raw bytes
 	 * from the *local dev server* (scripts/serve_web.py --dev-assets <dir>), never
@@ -314,6 +356,7 @@
 		loadFromIDB,
 		persistToIDB,
 		mountFromFileList,
+		mountFromZip,
 		mountFromDevServer,
 		mountFromPackage,
 		chdirToRoot,

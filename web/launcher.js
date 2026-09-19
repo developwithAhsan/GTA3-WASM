@@ -43,8 +43,10 @@
 		assetsOverlay: document.getElementById("assets-overlay"),
 		assetsStatus: document.getElementById("assets-status"),
 		assetsMissingList: document.getElementById("assets-missing-list"),
-		pickFolderBtn: document.getElementById("pick-folder-btn"),
-		devMountBtn: document.getElementById("dev-mount-btn"),
+			pickZipBtn: document.getElementById("pick-zip-btn"),
+			zipInput: document.getElementById("zip-input"),
+			pickFolderBtn: document.getElementById("pick-folder-btn"),
+			devMountBtn: document.getElementById("dev-mount-btn"),
 		startEngineBtn: document.getElementById("start-engine-btn"),
 		folderInput: document.getElementById("folder-input"),
 		inputDebugBtn: document.getElementById("input-debug-btn"),
@@ -490,8 +492,32 @@
 
 		await revalidateAssets(instance, mountPoint, manifest);
 
-		els.pickFolderBtn.addEventListener("click", () => els.folderInput.click());
-		els.folderInput.addEventListener("change", async () => {
+			els.pickZipBtn.addEventListener("click", () => els.zipInput.click());
+			els.zipInput.addEventListener("change", async () => {
+				const archive = els.zipInput.files[0];
+				if (!archive) return;
+				els.pickZipBtn.disabled = true;
+				const originalLabel = els.pickZipBtn.textContent;
+				try {
+					const n = await AssetVFS.mountFromZip(instance.FS, mountPoint, archive, {
+						onProgress: (done, total) => {
+							els.pickZipBtn.textContent = `Unpacking… ${done}/${total}`;
+						},
+					});
+					log(`[assets] loaded ${n} file(s) from ${archive.name}`, "info");
+					await AssetVFS.persistToIDB(instance.FS, mountPoint).catch(() => {});
+				} catch (err) {
+					log(`[assets] failed to load ZIP: ${err}`, "stderr");
+				} finally {
+					els.pickZipBtn.disabled = false;
+					els.pickZipBtn.textContent = originalLabel;
+					els.zipInput.value = "";
+				}
+				await revalidateAssets(instance, mountPoint, manifest);
+			});
+
+			els.pickFolderBtn.addEventListener("click", () => els.folderInput.click());
+			els.folderInput.addEventListener("change", async () => {
 			if (!els.folderInput.files.length) return;
 			els.pickFolderBtn.disabled = true;
 			const originalLabel = els.pickFolderBtn.textContent;
