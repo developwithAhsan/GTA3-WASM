@@ -1,9 +1,5 @@
 #include "common.h"
 
-#ifdef __EMSCRIPTEN__
-#include <emscripten.h>
-#endif
-
 #include "General.h"
 #include "Pad.h"
 #include "Hud.h"
@@ -1951,9 +1947,6 @@ CStreaming::LoadAllRequestedModels(bool priority)
 	int imgOffset, streamId, status;
 	int i;
 	uint32 posn, size;
-#ifdef __EMSCRIPTEN__
-	int wasmYieldCounter = 0;
-#endif
 
 	if(bInsideLoadAll)
 		return;
@@ -2117,14 +2110,6 @@ CStreaming::LoadAllRequestedModels(bool priority)
 			ms_aInfoForModel[streamId].m_loadState = STREAMSTATE_LOADED;
 		}
 
-#ifdef __EMSCRIPTEN__
-		// Browser CD streaming is synchronous. During initial world setup this
-		// loop can process many models back-to-back and monopolize the main
-		// browser thread. Yield every few models so Chrome can repaint and
-		// service its event loop while preserving the original load order.
-		if ((++wasmYieldCounter & 7) == 0)
-			emscripten_sleep(0);
-#endif
 	}
 
 	ms_bLoadingBigModel = false;
