@@ -1,0 +1,43 @@
+name: Diagnose Emscripten 6.0.9 symbols
+
+on:
+  push:
+    branches: [diagnose-wasm-609]
+
+permissions:
+  contents: read
+
+jobs:
+  symbols:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact deployed source
+        uses: actions/checkout@v4
+        with:
+          ref: e854306e2c67487a64e85cf04cb9b4b147243d67
+
+      - name: Set up Emscripten 6.0.9
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 6.0.9
+          actions-cache-folder: emsdk-cache-609
+
+      - name: Configure
+        run: emcmake cmake -B build-wasm -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build-wasm --target re3_wasm --parallel 4
+
+      - name: Verify symbols
+        run: |
+          emcc --version
+          test -f build-wasm/src/re3_wasm.js.symbols
+          wc -l build-wasm/src/re3_wasm.js.symbols
+          grep -E '^(3010|3011|761|1118|2138|2134):' build-wasm/src/re3_wasm.js.symbols || true
+
+      - name: Upload symbol map
+        uses: actions/upload-artifact@v4
+        with:
+          name: re3-wasm-609-symbols
+          path: build-wasm/src/re3_wasm.js.symbols
+          retention-days: 7
