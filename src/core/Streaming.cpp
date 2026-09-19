@@ -263,7 +263,7 @@ CStreaming::Init2(void)
 void
 CStreaming::Init(void)
 {
-#ifdef USE_TXD_CDIMAGE
+#if defined(USE_TXD_CDIMAGE) && !defined(__EMSCRIPTEN__)
 	int txdHandle = CFileMgr::OpenFile("MODELS\\TXD.IMG", "r");
 	if (txdHandle)
 		CFileMgr::CloseFile(txdHandle);

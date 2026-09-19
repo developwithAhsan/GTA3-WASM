@@ -33,6 +33,16 @@ jobs:
       - name: Build re3 WebAssembly runtime
         run: cmake --build build-wasm --target re3_wasm --parallel 4
 
+      - name: Verify browser shell
+        run: |
+          node --check web/vfs.js
+          node --check web/saves.js
+          node --check web/input.js
+          node --check web/perf.js
+          node --check web/boot.js
+          node --check web/launcher.js
+          python -m json.tool web/asset-manifest.json > /dev/null
+
       - name: Verify browser bundle
         run: |
           emcc --version

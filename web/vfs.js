@@ -42,7 +42,10 @@
 		// original AUDIO folder can add hundreds of MB to MEMFS for data the
 		// engine will never read, which is especially harmful because MEMFS is
 		// resident in browser memory.
-		if (top === "audio" || top === "mss") return true;
+		if (top === "audio" || top === "mss" || top === "movies" || top === "mp3") return true;
+
+		// WASM deliberately bypasses re3\'s generated TXD cache; importing it only wastes RAM.
+		if (lower === "models/txd.img" || lower === "models/txd.dir") return true;
 
 		// The browser port does not execute native Windows binaries/plugins.
 		if (/\.(exe|dll|asi|bat|cmd|com)$/i.test(normalized)) return true;
@@ -67,7 +70,7 @@
 	function writeFileDeep(FS, absPath, data) {
 		const dir = absPath.slice(0, absPath.lastIndexOf("/"));
 		if (dir) FS.mkdirTree(dir);
-		FS.writeFile(absPath, data);
+		FS.writeFile(absPath, data, { canOwn: true });
 	}
 
 	// --- mounting strategies ---------------------------------------------------

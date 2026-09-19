@@ -530,13 +530,20 @@
 
 			try {
 				const n = await AssetVFS.mountFromFileList(instance.FS, mountPoint, els.folderInput.files, {
-					onProgress: (done, total, currentFile, doneBytes, totalBytes, phase) => {
+					onProgress: (done, total, currentFile, doneBytes, totalBytes, phase, meta) => {
 						const fraction = totalBytes > 0 ? doneBytes / totalBytes : (total ? done / total : 0);
 						setProgress(fraction);
-						setLoadingStatus(`Loading game files — ${done}/${total}`);
-						setLoadingDetail(
-							`${phase === "reading" ? "Reading" : "Loaded"}: ${currentFile} • ${formatBytes(doneBytes)} / ${formatBytes(totalBytes)}`
-						);
+						if (phase === "filtered") {
+							setLoadingStatus(`Preparing ${total} required/relevant files…`);
+							setLoadingDetail(
+								`Skipped ${meta?.skippedFiles || 0} unused files (${formatBytes(meta?.skippedBytes || 0)}) to reduce browser memory use.`
+							);
+						} else {
+							setLoadingStatus(`Loading game files — ${done}/${total}`);
+							setLoadingDetail(
+								`${phase === "reading" ? "Reading" : "Loaded"}: ${currentFile} • ${formatBytes(doneBytes)} / ${formatBytes(totalBytes)}`
+							);
+						}
 						els.pickFolderBtn.textContent = `Loading… ${done}/${total}`;
 					},
 				});

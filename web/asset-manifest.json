@@ -103,7 +103,7 @@
     "optional": [
       {
         "path": "models/txd.img",
-        "why": "Generated/cached texture archive. Checked with CFileMgr::OpenFile first and only added if present (src/core/Streaming.cpp:267); safe to be absent -- re3 builds it from loose TXDs instead."
+        "why": "Not used by the WebAssembly build. Browser streaming bypasses the generated TXD cache and reads the original texture dictionaries directly, avoiding an expensive per-session cache build in MEMFS."
       },
       {
         "path": "audio",
@@ -111,7 +111,7 @@
       },
       {
         "path": "movies",
-        "why": "FMV intro/cutscenes. Not required for gameplay; skipped entirely if NO_MOVIES is defined."
+        "why": "Not used by the browser PC path; intro movie playback is not implemented for this Emscripten target."
       },
       {
         "path": "TEXT/english.gxt",
