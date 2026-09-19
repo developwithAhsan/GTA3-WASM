@@ -365,7 +365,7 @@
 			if (text == null) return;
 			result[checkedKey] = true;
 			const missing = new Set();
-			for (const path of parseLevelDat(text)) if (!resolveCI(index, path)) missing.add(path);
+			for (const path of parseLevelDat(text)) if (!validNonEmptyFile(path)) missing.add(path);
 			result[missingKey] = [...missing];
 		}
 
