@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#101317">
   <meta name="description" content="Play your legally owned copy of GTA III in a modern browser using the re3 WebAssembly port.">
   <title>GTA III — Play in Browser</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=10">
 </head>
 <body>
   <noscript>This page requires JavaScript and WebAssembly.</noscript>
@@ -48,10 +48,20 @@
 
         <div id="loading-overlay">
           <div class="loading-card">
+            <div class="loading-brand">
+              <span class="loading-mark">III</span>
+              <span>LIBERTY CITY</span>
+            </div>
             <div class="spinner"></div>
+            <h2 id="loading-title">Preparing GTA III</h2>
             <div id="loading-status">Loading WebAssembly module…</div>
-            <div class="progress-track">
+            <div id="loading-detail">Initializing the browser runtime.</div>
+            <div class="progress-track" aria-label="Loading progress">
               <div class="progress-fill indeterminate" id="progress-fill"></div>
+            </div>
+            <div class="loading-meta">
+              <span id="loading-percent">Loading…</span>
+              <span id="loading-stage">WASM</span>
             </div>
           </div>
         </div>
@@ -74,13 +84,13 @@
             <h2>Use your GTA III game files</h2>
             <p class="assets-hint">
               Choose the installation folder from a legally obtained PC copy of GTA III.
-              Files are read locally into browser storage and are not uploaded to this website.
+              Files are read locally into this browser session and are never uploaded to this website.
             </p>
 
             <div class="setup-steps">
               <div><span>1</span><p><strong>Select folder</strong><small>Choose your GTA III installation directory.</small></p></div>
               <div><span>2</span><p><strong>Validate files</strong><small>The launcher checks required game assets.</small></p></div>
-              <div><span>3</span><p><strong>Play</strong><small>Your imported files are remembered by this browser.</small></p></div>
+              <div><span>3</span><p><strong>Play</strong><small>The launcher starts GTA III and enters a new game automatically.</small></p></div>
             </div>
 
             <div id="assets-status" class="asset-status">Checking browser storage…</div>
@@ -165,11 +175,11 @@
   </div>
 
   <script src="build/re3_wasm.js"></script>
-  <script src="vfs.js?v=9"></script>
-  <script src="saves.js?v=9"></script>
-  <script src="input.js?v=9"></script>
-  <script src="perf.js?v=9"></script>
-  <script src="boot.js?v=9"></script>
-  <script src="launcher.js?v=9"></script>
+  <script src="vfs.js?v=10"></script>
+  <script src="saves.js?v=10"></script>
+  <script src="input.js?v=10"></script>
+  <script src="perf.js?v=10"></script>
+  <script src="boot.js?v=10"></script>
+  <script src="launcher.js?v=10"></script>
 </body>
 </html>
