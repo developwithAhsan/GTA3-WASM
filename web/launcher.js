@@ -49,6 +49,7 @@
 		folderInput: document.getElementById("folder-input"),
 		inputDebugBtn: document.getElementById("input-debug-btn"),
 		pointerlockHint: document.getElementById("pointerlock-hint"),
+		heroLayer: document.querySelector(".hero-layer"),
 		inputSummaryTable: document.getElementById("input-summary-table"),
 		inputMouseTable: document.getElementById("input-mouse-table"),
 		inputKeysList: document.getElementById("input-keys-list"),
@@ -424,6 +425,8 @@
 
 	function renderAssetValidation(result, mountPoint) {
 		const total = result.presentRequired.length + result.missingRequired.length;
+		els.startEngineBtn.disabled = !result.ok;
+		els.startEngineBtn.textContent = result.ok ? "Play GTA III" : "Game files required";
 		setDiag("Required assets present", `${result.presentRequired.length} / ${total}`, result.missingRequired.length === 0);
 		if (result.gta3DatChecked) {
 			setDiag("data/gta3.dat references missing", String(result.missingFromGta3Dat.length), result.missingFromGta3Dat.length === 0);
@@ -569,6 +572,7 @@
 		}
 
 		els.assetsOverlay.classList.add("hidden");
+		els.heroLayer?.classList.add("hidden");
 		AssetVFS.chdirToRoot(instance.FS, mountPoint);
 		log(`[module] cwd set to ${mountPoint}, calling main()`, "info");
 
@@ -706,7 +710,7 @@
 			els.assetsOverlay.classList.remove("hidden"); // still let the user hit Start
 		}
 
-		setStatus("ok", "Ready -- provide assets and/or click Start.");
+		setStatus("ok", "Ready — select your GTA III folder to play.");
 		els.startEngineBtn.addEventListener("click", () => {
 			runEngineMain(instance, mountPoint, focusRecovery, tabThrottling)
 				.catch((err) => showFatalError("Engine startup failed unexpectedly", err));
